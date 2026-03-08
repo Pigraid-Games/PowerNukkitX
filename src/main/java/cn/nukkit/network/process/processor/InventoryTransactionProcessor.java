@@ -20,6 +20,7 @@ import cn.nukkit.item.Item;
 import cn.nukkit.item.ItemBlock;
 import cn.nukkit.item.ItemMace;
 import cn.nukkit.item.ItemSpear;
+import cn.nukkit.item.ProjectileItem;
 import cn.nukkit.item.enchantment.Enchantment;
 import cn.nukkit.level.GameRule;
 import cn.nukkit.level.Sound;
@@ -317,6 +318,21 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                 Block block = target.getSide(face);
                 player.level.sendBlocks(new Player[]{player}, new Block[]{target, block}, UpdateBlockPacket.FLAG_NOGRAPHIC);
                 player.level.sendBlocks(new Player[]{player}, new Block[]{target.getLevelBlockAtLayer(1), block.getLevelBlockAtLayer(1)}, UpdateBlockPacket.FLAG_NOGRAPHIC, 1);
+
+                // Bedrock client sends CLICK_BLOCK instead of CLICK_AIR when the crosshair is on a
+                // block (e.g. looking at the ground). For throwable items this means onClickAir is
+                // never called and the projectile is never launched. Fall back to launching it here.
+                Item heldItem = player.getInventory().getItemInHand();
+                if (heldItem instanceof ProjectileItem) {
+                    Vector3 directionVector = player.getDirectionVector();
+                    PlayerInteractEvent interactEvent = new PlayerInteractEvent(player, heldItem.clone(), directionVector, face, PlayerInteractEvent.Action.RIGHT_CLICK_AIR);
+                    player.getServer().getPluginManager().callEvent(interactEvent);
+                    if (!interactEvent.isCancelled()) {
+                        if (heldItem.onClickAir(player, directionVector) && !player.isCreative()) {
+                            player.getInventory().setItem(useItemData.hotbarSlot, heldItem);
+                        }
+                    }
+                }
             }
             case InventoryTransactionPacket.USE_ITEM_ACTION_BREAK_BLOCK -> {
                 //Creative mode use PlayerActionPacket.ACTION_CREATIVE_PLAYER_DESTROY_BLOCK
