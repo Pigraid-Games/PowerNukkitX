@@ -207,11 +207,28 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
     public boolean attack(EntityDamageEvent source) {
         if (this.noDamageTicks > 0 && source.getCause() != DamageCause.SUICIDE) {//ignore it if the cause is SUICIDE
             return false;
-        } else if (this.attackTime > 0 && !attackTimeByShieldKb) {
+        }
+
+        boolean immunityPartialHit = false;
+        if (this.attackTime > 0 && !attackTimeByShieldKb) {
             EntityDamageEvent lastCause = this.getLastDamageCause();
-            if (lastCause != null && lastCause.getDamage() >= source.getDamage()) {
-                return false;
+            if (lastCause != null) {
+                // Block all follow-up attacks if the previous hit dealt 0 damage (e.g. snowball/egg)
+                // to prevent projectile-to-melee combo exploits
+                if (lastCause.getDamage() <= 0) {
+                    return false;
+                }
+                if (lastCause.getDamage() >= source.getDamage()) {
+                    return false;
+                }
+                // Partial immunity: follow-up hit deals only the difference
+                immunityPartialHit = true;
             }
+        }
+
+        // Suppress enchantment side effects (Fire Aspect, etc.) during immunity partial hits
+        if (immunityPartialHit && source instanceof EntityDamageByEntityEvent) {
+            ((EntityDamageByEntityEvent) source).setSkipEnchantmentEffects(true);
         }
 
         if (isBlocking() && this.blockedByShield(source)) {
@@ -241,9 +258,12 @@ public abstract class EntityLiving extends Entity implements EntityDamageable {
                     this.setOnFire(2 * this.server.getDifficulty());
                 }
 
-                double deltaX = this.x - damager.x;
-                double deltaZ = this.z - damager.z;
-                this.knockBack(damager, source.getDamage(), deltaX, deltaZ, ((EntityDamageByEntityEvent) source).getKnockBack());
+                // Suppress knockback during immunity partial hits to prevent KB stacking
+                if (!immunityPartialHit) {
+                    double deltaX = this.x - damager.x;
+                    double deltaZ = this.z - damager.z;
+                    this.knockBack(damager, source.getDamage(), deltaX, deltaZ, ((EntityDamageByEntityEvent) source).getKnockBack());
+                }
             }
 
             EntityEventPacket pk = new EntityEventPacket();

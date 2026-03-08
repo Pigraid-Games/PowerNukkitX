@@ -208,6 +208,11 @@ public class InventoryTransactionProcessor extends DataPacketProcessor<Inventory
                         return;
                     }
                 }
+                // Enforce attacker-side 500ms attack cooldown to prevent item-switch double-hit exploit
+                if (!player.tryConsumeAttackCooldown()) {
+                    return;
+                }
+
                 float itemDamage = item.getAttackDamage(player);
                 Enchantment[] enchantments = item.getEnchantments();
                 if (item.applyEnchantments()) {

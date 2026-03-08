@@ -289,6 +289,23 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
      */
     protected Entity lastAttackEntity = null;
 
+    // Attacker-side 500ms cooldown to prevent item-switch double-hit exploit
+    private long lastAttackTimeNs = 0;
+    private static final long ATTACK_COOLDOWN_NS = 500_000_000L; // 10 ticks at 20 TPS
+
+    /**
+     * Returns true and records the attack timestamp if the player is allowed to attack now.
+     * Returns false if they are still within the 500ms cooldown window.
+     */
+    public boolean tryConsumeAttackCooldown() {
+        long now = System.nanoTime();
+        if (now - this.lastAttackTimeNs < ATTACK_COOLDOWN_NS) {
+            return false;
+        }
+        this.lastAttackTimeNs = now;
+        return true;
+    }
+
     /**
      * Fog settings of player.
      */
@@ -635,6 +652,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         this.dataPacket(setTimePacket);
 
         this.noDamageTicks = 60;
+        this.lastAttackTimeNs = 0; // Reset attack cooldown on first spawn
 
         synchronized (playerChunkManager) {
             for (long index : playerChunkManager.getUsedChunks()) {
@@ -1360,6 +1378,7 @@ public class Player extends EntityHuman implements CommandSender, ChunkLoader, I
         this.fireTicks = 0;
         this.collisionBlocks = null;
         this.noDamageTicks = 60;
+        this.lastAttackTimeNs = 0; // Reset attack cooldown on respawn
 
         this.removeAllEffects();
         this.setHealth(this.getMaxHealth());
